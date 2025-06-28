@@ -35,8 +35,12 @@ router.include_router(
     tags=["users"],
 )
 router.include_router(
-    api_users.get_auth_router(auth_jwt), prefix="/auth/jwt", tags=["auth"],
+    api_users.get_auth_router(auth_jwt),
+    prefix="/auth/jwt",
+    tags=["auth"],
 )
 router.include_router(
-    api_users.get_auth_router(auth_cookie), prefix="/auth/cookie", tags=["auth"],
+    api_users.get_auth_router(auth_cookie),
+    prefix="/auth/cookie",
+    tags=["auth"],
 )

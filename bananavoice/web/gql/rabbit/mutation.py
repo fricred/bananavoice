@@ -12,7 +12,9 @@ class Mutation:
 
     @strawberry.mutation(description="Send message to RabbitMQ")
     async def send_rabbit_message(
-        self, message: RabbitMessageDTO, info: Info[Context, None],
+        self,
+        message: RabbitMessageDTO,
+        info: Info[Context, None],
     ) -> None:
         """
         Sends a message in RabbitMQ.
