@@ -23,6 +23,8 @@ services:
       BANANAVOICE_DB_BASE: bananavoice
       BANANAVOICE_RABBIT_HOST: bananavoice-rmq
       BANANAVOICE_REDIS_HOST: bananavoice-redis
+    ports:
+      - "8000:8000"
 
   taskiq-worker:
     <<: *main_app
@@ -31,6 +33,7 @@ services:
       - taskiq
       - worker
       - bananavoice.tkq:broker
+    ports: []
 
   db:
     image: mysql:8.4
@@ -55,6 +58,8 @@ services:
       retries: 40
     volumes:
       - "bananavoice-db-data:/bitnami/mysql/data"
+    ports:
+      - "3306:3306"
 
   migrator:
     image: bananavoice:${BANANAVOICE_VERSION:-latest}
@@ -81,6 +86,8 @@ services:
       interval: 1s
       timeout: 3s
       retries: 50
+    ports:
+      - "6379:6379"
 
   rmq:
     image: rabbitmq:3.9.16-alpine
@@ -95,8 +102,9 @@ services:
       interval: 3s
       timeout: 3s
       retries: 50
-
-
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI (optional)
 
 volumes:
   bananavoice-db-data:
