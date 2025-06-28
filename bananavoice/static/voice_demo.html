@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BananaVoice POC Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h2 {
+            color: #666;
+            margin-top: 0;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍌 BananaVoice POC Demo</h1>
+        
+        <div class="section">
+            <h2>🗣️ Text-to-Speech</h2>
+            <textarea 
+                id="ttsText" 
+                placeholder="Enter text to convert to speech..."
+                rows="3">Hello from BananaVoice! This is a proof of concept.</textarea>
+            <br>
+            <button onclick="generateSpeech()">Generate Speech</button>
+            <div id="ttsStatus"></div>
+            <audio id="audioPlayer" controls style="display:none;"></audio>
+        </div>
+        
+        <div class="section">
+            <h2>🎤 Speech-to-Text</h2>
+            <input type="file" id="audioFile" accept="audio/*">
+            <br><br>
+            <button onclick="transcribeAudio()">Transcribe Audio</button>
+            <div id="sttStatus"></div>
+            <div id="transcriptionResult" style="margin-top: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; display: none;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>📊 API Status</h2>
+            <button onclick="checkHealth()">Check Voice API Health</button>
+            <div id="healthStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        // Text-to-Speech function
+        async function generateSpeech() {
+            const text = document.getElementById('ttsText').value;
+            const statusDiv = document.getElementById('ttsStatus');
+            const audioPlayer = document.getElementById('audioPlayer');
+            
+            if (!text.trim()) {
+                showStatus(statusDiv, 'Please enter some text', 'error');
+                return;
+            }
+            
+            showStatus(statusDiv, 'Generating speech...', 'success');
+            
+            try {
+                const response = await fetch('/api/voice/tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice: 'default'
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioUrl;
+                    audioPlayer.style.display = 'block';
+                    showStatus(statusDiv, 'Speech generated successfully!', 'success');
+                } else {
+                    showStatus(statusDiv, 'Error generating speech', 'error');
+                }
+            } catch (error) {
+                showStatus(statusDiv, `Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Speech-to-Text function
+        async function transcribeAudio() {
+            const fileInput = document.getElementById('audioFile');
+            const statusDiv = document.getElementById('sttStatus');
+            const resultDiv = document.getElementById('transcriptionResult');
+            
+            if (!fileInput.files[0]) {
+                showStatus(statusDiv, 'Please select an audio file', 'error');
+                return;
+            }
+            
+            showStatus(statusDiv, 'Transcribing audio...', 'success');
+            
+            const formData = new FormData();
+            formData.append('audio', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/voice/stt', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    resultDiv.innerHTML = `<strong>Transcription:</strong> ${result.text}<br><small>Confidence: ${(result.confidence * 100).toFixed(1)}%</small>`;
+                    resultDiv.style.display = 'block';
+                    showStatus(statusDiv, 'Transcription completed!', 'success');
+                } else {
+                    showStatus(statusDiv, 'Error transcribing audio', 'error');
+                }
+            } catch (error) {
+                showStatus(statusDiv, `Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Health check function
+        async function checkHealth() {
+            const statusDiv = document.getElementById('healthStatus');
+            
+            try {
+                const response = await fetch('/api/voice/health');
+                if (response.ok) {
+                    const result = await response.json();
+                    showStatus(statusDiv, `Voice API is ${result.status}`, 'success');
+                } else {
+                    showStatus(statusDiv, 'Voice API is not responding', 'error');
+                }
+            } catch (error) {
+                showStatus(statusDiv, `Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Helper function to show status messages
+        function showStatus(element, message, type) {
+            element.innerHTML = message;
+            element.className = `status ${type}`;
+        }
+        
+        // Check health on page load
+        window.onload = function() {
+            checkHealth();
+        };
+    </script>
+</body>
+</html>
