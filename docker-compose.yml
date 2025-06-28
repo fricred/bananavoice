@@ -1,0 +1,103 @@
+services:
+  api: &main_app
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    image: bananavoice:${BANANAVOICE_VERSION:-latest}
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rmq:
+        condition: service_healthy
+    environment:
+      BANANAVOICE_HOST: 0.0.0.0
+      BANANAVOICE_DB_HOST: bananavoice-db
+      BANANAVOICE_DB_PORT: 3306
+      BANANAVOICE_DB_USER: bananavoice
+      BANANAVOICE_DB_PASS: bananavoice
+      BANANAVOICE_DB_BASE: bananavoice
+      BANANAVOICE_RABBIT_HOST: bananavoice-rmq
+      BANANAVOICE_REDIS_HOST: bananavoice-redis
+
+  taskiq-worker:
+    <<: *main_app
+    labels: []
+    command:
+      - taskiq
+      - worker
+      - bananavoice.tkq:broker
+
+  db:
+    image: mysql:8.4
+    hostname: bananavoice-db
+    restart: always
+    environment:
+      MYSQL_ROOT_USER: "root"
+      MYSQL_ROOT_PASSWORD: "bananavoice"
+      MYSQL_USER: "bananavoice"
+      MYSQL_PASSWORD: "bananavoice"
+      MYSQL_DATABASE: "bananavoice"
+      MYSQL_HOST: "0.0.0.0"
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - --user=bananavoice
+        - --password=bananavoice
+      interval: 10s
+      timeout: 5s
+      retries: 40
+    volumes:
+      - "bananavoice-db-data:/bitnami/mysql/data"
+
+  migrator:
+    image: bananavoice:${BANANAVOICE_VERSION:-latest}
+    restart: "no"
+    command: alembic upgrade head
+    environment:
+      BANANAVOICE_DB_HOST: bananavoice-db
+      BANANAVOICE_DB_PORT: 3306
+      BANANAVOICE_DB_USER: bananavoice
+      BANANAVOICE_DB_PASS: bananavoice
+      BANANAVOICE_DB_BASE: bananavoice
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: bitnami/redis:6.2.5
+    hostname: "bananavoice-redis"
+    restart: always
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: redis-cli ping
+      interval: 1s
+      timeout: 3s
+      retries: 50
+
+  rmq:
+    image: rabbitmq:3.9.16-alpine
+    hostname: "bananavoice-rmq"
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    healthcheck:
+      test: rabbitmq-diagnostics check_running -q
+      interval: 3s
+      timeout: 3s
+      retries: 50
+
+
+
+volumes:
+  bananavoice-db-data:
+    name: bananavoice-db-data

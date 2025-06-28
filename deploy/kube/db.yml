@@ -1,0 +1,76 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: bananavoice
+  name: bananavoice-db
+spec:
+  selector:
+    matchLabels:
+      app: bananavoice-db
+  template:
+    metadata:
+      labels:
+        app: bananavoice-db
+    spec:
+      containers:
+        - name: database
+          image: mysql:8.4
+          resources:
+            limits:
+              memory: "300Mi"
+              cpu: "200m"
+          env:
+            - name: MYSQL_PASSWORD
+              value: "bananavoice"
+            - name: MYSQL_USER
+              value: "bananavoice"
+            - name: MYSQL_DATABASE
+              value: "bananavoice"
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+          ports:
+            - containerPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: bananavoice
+  name: "bananavoice-db-service"
+spec:
+  selector:
+    app: bananavoice-db
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: bananavoice
+  name: bananavoice-migrator
+spec:
+  ttlSecondsAfterFinished: 100
+  template:
+    spec:
+      containers:
+      - name: migrator
+        image: bananavoice:latest
+        command:
+          - "alembic"
+          - "upgrade"
+          - "head"
+        resources:
+          limits:
+            memory: "200Mi"
+            cpu: "250m"
+        env:
+          - name: "BANANAVOICE_DB_HOST"
+            value: "bananavoice-db-service"
+      initContainers:
+        - name: wait-for-db
+          image: toschneck/wait-for-it:latest
+          command: ["./wait-for-it.sh", "-t", "60", "bananavoice-db-service:3306"]
+      restartPolicy: Never
+
+---

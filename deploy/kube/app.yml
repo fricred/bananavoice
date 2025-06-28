@@ -1,0 +1,78 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: bananavoice
+  name: bananavoice-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bananavoice-app
+  template:
+    metadata:
+      labels:
+        app: bananavoice-app
+    spec:
+      containers:
+        - name: app
+          image: bananavoice:latest
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: api-port
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: BANANAVOICE_HOST
+              value: "0.0.0.0"
+            - name: BANANAVOICE_WORKERS_COUNT
+              value: "10"
+            - name: BANANAVOICE_DB_HOST
+              value: "bananavoice-db-service"
+            - name: BANANAVOICE_REDIS_HOST
+              value: "bananavoice-redis-service"
+          resources:
+            limits:
+              memory: "200Mi"
+              cpu: "100m"
+          ports:
+            - containerPort: 8000
+              name: api-port
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: bananavoice
+  name: bananavoice-app-service
+spec:
+  selector:
+    app: bananavoice-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: api-port
+      name: api-port
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bananavoice-app
+  namespace: bananavoice
+  labels:
+    name: bananavoice-app
+spec:
+  rules:
+    - host: bananavoice.local
+      http:
+        paths:
+          - pathType: Prefix
+            path: "/"
+            backend:
+              service:
+                name: bananavoice-app-service
+                port:
+                  name: api-port
+
+---
