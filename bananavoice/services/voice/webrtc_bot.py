@@ -36,9 +36,27 @@ Your output will be converted to audio, so:
 Respond naturally to what the user says and help them with their questions or tasks.
 """
 
-# WebRTC configuration
+# WebRTC configuration with TURN servers for server environments
 ICE_SERVERS = [
+    # Google STUN servers
     IceServer(urls="stun:stun.l.google.com:19302"),
+    IceServer(urls="stun:stun1.l.google.com:19302"),
+    # Public TURN servers (for production environments behind NAT)
+    IceServer(
+        urls="turn:openrelay.metered.ca:80",
+        username="openrelayproject",
+        credential="openrelayproject"
+    ),
+    IceServer(
+        urls="turn:openrelay.metered.ca:443",
+        username="openrelayproject", 
+        credential="openrelayproject"
+    ),
+    IceServer(
+        urls="turn:openrelay.metered.ca:443?transport=tcp",
+        username="openrelayproject",
+        credential="openrelayproject"
+    ),
 ]
 
 
