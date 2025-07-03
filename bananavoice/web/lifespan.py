@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from bananavoice.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
 from bananavoice.services.redis.lifespan import init_redis, shutdown_redis
+from bananavoice.services.voice.webrtc_bot import cleanup_webrtc_voice_agent
 from bananavoice.settings import settings
 from bananavoice.tkq import broker
 
@@ -159,4 +160,5 @@ async def lifespan_setup(
 
     await shutdown_redis(app)
     await shutdown_rabbit(app)
+    await cleanup_webrtc_voice_agent()
     stop_opentelemetry(app)

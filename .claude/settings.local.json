@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(poetry install:*)",
+      "Bash(poetry lock:*)",
+      "Bash(poetry run mypy:*)",
+      "Bash(poetry run ruff:*)",
+      "Bash(poetry run:*)",
+      "Bash(poetry add:*)",
+      "Bash(curl:*)",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)"
+    ],
+    "deny": []
+  }
+}

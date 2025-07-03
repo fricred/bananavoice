@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # E.G. http://localhost:4317
     opentelemetry_endpoint: Optional[str] = None
 
+    # Voice service API keys
+    daily_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    cartesia_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
+
     @property
     def db_url(self) -> URL:
         """

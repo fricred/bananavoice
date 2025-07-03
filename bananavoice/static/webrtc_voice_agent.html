@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BananaVoice WebRTC Agent</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .status {
+            font-size: 20px;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            margin: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .controls {
+            margin: 30px 0;
+        }
+        .info {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #e7f3ff;
+            border-radius: 8px;
+            text-align: left;
+        }
+        .info h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .info ul {
+            margin: 10px 0;
+        }
+        .info li {
+            margin: 5px 0;
+        }
+        #audio-el {
+            display: none;
+        }
+        .connection-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍌 BananaVoice WebRTC Agent</h1>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div class="controls">
+            <button id="connect-btn">Connect</button>
+        </div>
+        
+        <audio id="audio-el" autoplay></audio>
+        
+        <div id="connection-info" class="connection-info" style="display: none;">
+            <div>Connection State: <span id="connection-state">-</span></div>
+            <div>ICE Connection State: <span id="ice-state">-</span></div>
+            <div>ICE Gathering State: <span id="ice-gathering-state">-</span></div>
+        </div>
+        
+        <div class="info">
+            <h3>How to use:</h3>
+            <ul>
+                <li><strong>Click "Connect"</strong> to start a voice conversation with BananaVoice</li>
+                <li><strong>Allow microphone access</strong> when prompted by your browser</li>
+                <li><strong>Start speaking</strong> - the AI will listen and respond with voice</li>
+                <li><strong>Click "Disconnect"</strong> to end the conversation</li>
+            </ul>
+            
+            <h3>Technical Details:</h3>
+            <ul>
+                <li>Uses WebRTC for peer-to-peer audio communication</li>
+                <li>Powered by Google's Gemini Multimodal Live API</li>
+                <li>Real-time voice activity detection</li>
+                <li>Low-latency audio processing</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById("status");
+        const buttonEl = document.getElementById("connect-btn");
+        const audioEl = document.getElementById("audio-el");
+        const connectionInfoEl = document.getElementById("connection-info");
+        const connectionStateEl = document.getElementById("connection-state");
+        const iceStateEl = document.getElementById("ice-state");
+        const iceGatheringStateEl = document.getElementById("ice-gathering-state");
+
+        let connected = false;
+        let peerConnection = null;
+        let pcId = null;
+
+        // Wait for ICE gathering to complete
+        const waitForIceGatheringComplete = async (pc, timeoutMs = 2000) => {
+            if (pc.iceGatheringState === 'complete') return;
+            console.log("Waiting for ICE gathering to complete. Current state:", pc.iceGatheringState);
+            
+            return new Promise((resolve) => {
+                let timeoutId;
+                const checkState = () => {
+                    console.log("icegatheringstatechange:", pc.iceGatheringState);
+                    updateIceGatheringState(pc.iceGatheringState);
+                    if (pc.iceGatheringState === 'complete') {
+                        cleanup();
+                        resolve();
+                    }
+                };
+                const onTimeout = () => {
+                    console.warn(`ICE gathering timed out after ${timeoutMs} ms.`);
+                    cleanup();
+                    resolve();
+                };
+                const cleanup = () => {
+                    pc.removeEventListener('icegatheringstatechange', checkState);
+                    clearTimeout(timeoutId);
+                };
+                
+                pc.addEventListener('icegatheringstatechange', checkState);
+                timeoutId = setTimeout(onTimeout, timeoutMs);
+                // Check the state again to avoid race conditions
+                checkState();
+            });
+        };
+
+        // Create WebRTC connection
+        const createSmallWebRTCConnection = async (audioTrack) => {
+            const config = {
+                iceServers: []
+            };
+            
+            const pc = new RTCPeerConnection(config);
+            addPeerConnectionEventListeners(pc);
+            
+            // Set up audio playback
+            pc.ontrack = e => {
+                console.log("Received remote audio track");
+                audioEl.srcObject = e.streams[0];
+            };
+            
+            // Add transceivers (SmallWebRTCTransport expects both audio and video)
+            pc.addTransceiver(audioTrack, { direction: 'sendrecv' });
+            pc.addTransceiver('video', { direction: 'sendrecv' });
+            
+            // Create offer
+            await pc.setLocalDescription(await pc.createOffer());
+            await waitForIceGatheringComplete(pc);
+            
+            const offer = pc.localDescription;
+            
+            // Send offer to server
+            const requestBody = {
+                sdp: offer.sdp,
+                type: offer.type
+            };
+            
+            // Include pc_id for renegotiation if we have one
+            if (pcId) {
+                requestBody.pc_id = pcId;
+            }
+            
+            const response = await fetch('/api/voice/webrtc/offer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const answer = await response.json();
+            pcId = answer.pc_id; // Store the connection ID
+            
+            await pc.setRemoteDescription(answer);
+            return pc;
+        };
+
+        // Add event listeners to peer connection
+        const addPeerConnectionEventListeners = (pc) => {
+            pc.oniceconnectionstatechange = () => {
+                console.log("ICE connection state:", pc.iceConnectionState);
+                updateIceState(pc.iceConnectionState);
+            };
+            
+            pc.onconnectionstatechange = () => {
+                console.log("Connection state:", pc.connectionState);
+                updateConnectionState(pc.connectionState);
+                
+                if (pc.connectionState === 'connected') {
+                    onConnected();
+                } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                    onDisconnected();
+                }
+            };
+            
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log("New ICE candidate:", event.candidate);
+                } else {
+                    console.log("All ICE candidates have been sent.");
+                }
+            };
+            
+            pc.onicegatheringstatechange = () => {
+                updateIceGatheringState(pc.iceGatheringState);
+            };
+        };
+
+        // Update UI states
+        const updateConnectionState = (state) => {
+            connectionStateEl.textContent = state;
+        };
+
+        const updateIceState = (state) => {
+            iceStateEl.textContent = state;
+        };
+
+        const updateIceGatheringState = (state) => {
+            iceGatheringStateEl.textContent = state;
+        };
+
+        // Connection state handlers
+        const onConnecting = () => {
+            statusEl.textContent = "Connecting...";
+            statusEl.className = "status connecting";
+            buttonEl.textContent = "Disconnect";
+            buttonEl.disabled = true;
+            connectionInfoEl.style.display = "block";
+            connected = true;
+        };
+
+        const onConnected = () => {
+            statusEl.textContent = "Connected - Start speaking!";
+            statusEl.className = "status connected";
+            buttonEl.textContent = "Disconnect";
+            buttonEl.disabled = false;
+            connected = true;
+        };
+
+        const onDisconnected = () => {
+            statusEl.textContent = "Disconnected";
+            statusEl.className = "status disconnected";
+            buttonEl.textContent = "Connect";
+            buttonEl.disabled = false;
+            connectionInfoEl.style.display = "none";
+            connected = false;
+            pcId = null;
+        };
+
+        // Connect function
+        const connect = async () => {
+            try {
+                onConnecting();
+                
+                // Get user media
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000
+                    }
+                });
+                
+                console.log("Got user media, creating WebRTC connection...");
+                peerConnection = await createSmallWebRTCConnection(audioStream.getAudioTracks()[0]);
+                
+            } catch (error) {
+                console.error("Error connecting:", error);
+                alert(`Connection failed: ${error.message}`);
+                onDisconnected();
+            }
+        };
+
+        // Disconnect function
+        const disconnect = () => {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            onDisconnected();
+        };
+
+        // Button click handler
+        buttonEl.addEventListener("click", async () => {
+            if (!connected) {
+                await connect();
+            } else {
+                disconnect();
+            }
+        });
+
+        // Check if page is served over HTTPS (required for WebRTC)
+        window.addEventListener('load', () => {
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                alert('WebRTC requires HTTPS. Please access this page over HTTPS.');
+            }
+        });
+    </script>
+</body>
+</html>
