@@ -289,7 +289,9 @@ async def webrtc_offer(
         # Check if this is a renegotiation
         if request.pc_id:
             answer = await agent.renegotiate_connection(
-                request.pc_id, request.sdp, request.type,
+                request.pc_id,
+                request.sdp,
+                request.type,
             )
             if answer:
                 return WebRTCOfferResponse(**answer)
