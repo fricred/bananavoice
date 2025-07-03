@@ -179,7 +179,27 @@
         // Create WebRTC connection
         const createSmallWebRTCConnection = async (audioTrack) => {
             const config = {
-                iceServers: []
+                iceServers: [
+                    // Google STUN servers
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    // Public TURN servers for server environments
+                    { 
+                        urls: 'turn:openrelay.metered.ca:80',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:443',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    }
+                ]
             };
             
             const pc = new RTCPeerConnection(config);
