@@ -1,43 +1,48 @@
 services:
-  api: &main_app
+  bananavoice-api: &main_app
     build:
       context: .
       dockerfile: ./Dockerfile
     image: bananavoice:${BANANAVOICE_VERSION:-latest}
+    container_name: gothcorp-bananavoice-api
     restart: always
     env_file:
       - .env
     depends_on:
-      db:
+      bananavoice-db:
         condition: service_healthy
-      redis:
+      bananavoice-redis:
         condition: service_healthy
-      rmq:
+      bananavoice-rmq:
         condition: service_healthy
     environment:
       BANANAVOICE_HOST: 0.0.0.0
-      BANANAVOICE_DB_HOST: bananavoice-db
+      BANANAVOICE_DB_HOST: gothcorp-bananavoice-db
       BANANAVOICE_DB_PORT: 3306
       BANANAVOICE_DB_USER: bananavoice
       BANANAVOICE_DB_PASS: bananavoice
       BANANAVOICE_DB_BASE: bananavoice
-      BANANAVOICE_RABBIT_HOST: bananavoice-rmq
-      BANANAVOICE_REDIS_HOST: bananavoice-redis
-    ports:
-      - "8000:8000"
+      BANANAVOICE_RABBIT_HOST: gothcorp-bananavoice-rmq
+      BANANAVOICE_REDIS_HOST: gothcorp-bananavoice-redis
+    networks:
+      - gothcorp
 
-  taskiq-worker:
+  bananavoice-worker:
     <<: *main_app
+    container_name: gothcorp-bananavoice-worker
     labels: []
     command:
       - taskiq
       - worker
       - bananavoice.tkq:broker
     ports: []
+    networks:
+      - gothcorp
 
-  db:
+  bananavoice-db:
     image: mysql:8.4
-    hostname: bananavoice-db
+    container_name: gothcorp-bananavoice-db
+    hostname: gothcorp-bananavoice-db
     restart: always
     environment:
       MYSQL_ROOT_USER: "root"
@@ -57,27 +62,31 @@ services:
       timeout: 5s
       retries: 40
     volumes:
-      - "bananavoice-db-data:/bitnami/mysql/data"
-    ports:
-      - "3306:3306"
+      - "gothcorp-bananavoice-db-data:/var/lib/mysql"
+    networks:
+      - gothcorp
 
-  migrator:
+  bananavoice-migrator:
     image: bananavoice:${BANANAVOICE_VERSION:-latest}
+    container_name: gothcorp-bananavoice-migrator
     restart: "no"
     command: alembic upgrade head
     environment:
-      BANANAVOICE_DB_HOST: bananavoice-db
+      BANANAVOICE_DB_HOST: gothcorp-bananavoice-db
       BANANAVOICE_DB_PORT: 3306
       BANANAVOICE_DB_USER: bananavoice
       BANANAVOICE_DB_PASS: bananavoice
       BANANAVOICE_DB_BASE: bananavoice
     depends_on:
-      db:
+      bananavoice-db:
         condition: service_healthy
+    networks:
+      - gothcorp
 
-  redis:
+  bananavoice-redis:
     image: bitnami/redis:6.2.5
-    hostname: "bananavoice-redis"
+    container_name: gothcorp-bananavoice-redis
+    hostname: gothcorp-bananavoice-redis
     restart: always
     environment:
       ALLOW_EMPTY_PASSWORD: "yes"
@@ -86,12 +95,13 @@ services:
       interval: 1s
       timeout: 3s
       retries: 50
-    ports:
-      - "6379:6379"
+    networks:
+      - gothcorp
 
-  rmq:
+  bananavoice-rmq:
     image: rabbitmq:3.9.16-alpine
-    hostname: "bananavoice-rmq"
+    container_name: gothcorp-bananavoice-rmq
+    hostname: gothcorp-bananavoice-rmq
     restart: always
     environment:
       RABBITMQ_DEFAULT_USER: "guest"
@@ -102,10 +112,14 @@ services:
       interval: 3s
       timeout: 3s
       retries: 50
-    ports:
-      - "5672:5672"
-      - "15672:15672"  # Management UI (optional)
+    networks:
+      - gothcorp
 
 volumes:
-  bananavoice-db-data:
-    name: bananavoice-db-data
+  gothcorp-bananavoice-db-data:
+    name: gothcorp-bananavoice-db-data
+
+networks:
+  gothcorp:
+    external: true
+    name: gothcorp
